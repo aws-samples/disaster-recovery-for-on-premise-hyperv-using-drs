@@ -1,0 +1,333 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  This template deploys the infrastructure components required to simulate 
+  a Hyper-V disaster recovery scenario using Elastic Disaster Recovery (DRS).
+
+  **WARNING** You will be billed for the AWS resources created if you create a stack from this template.
+
+  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+  SPDX-License-Identifier: MIT-0
+  
+Parameters:
+  PrimaryVpcCIDR:
+    Description: Enter the IP range (CIDR notation) for the primary VPC
+    Type: String
+    Default: 10.0.0.0/16
+  StagingVpcCIDR:
+    Description: Enter the IP range (CIDR notation) for the DRS staging VPC
+    Type: String
+    Default: 10.0.0.0/16
+  RecoveryVpcCIDR:
+    Description: Enter the IP range (CIDR notation) for the DRS recovery VPC
+    Type: String
+    Default: 10.0.0.0/16
+  PrimaryPublicSubnetCIDR:
+    Description: Enter the IP range (CIDR notation) for the primary subnet in the first Availability Zone
+    Type: String
+    Default: 10.0.0.0/24
+  StagingPublicSubnetCIDR:
+    Description: Enter the IP range (CIDR notation) for the staging subnet in the second Availability Zone
+    Type: String
+    Default: 10.0.0.0/24
+  RecoveryPublicSubnetCIDR:
+    Description: Enter the IP range (CIDR notation) for the recovery subnet in the second Availability Zone
+    Type: String
+    Default: 10.0.0.0/24
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access or password decryption to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  HyperVInstanceType:
+    Description: Hyper-V bare metal instance type
+    Type: String
+    Default: c5n.metal
+  IpLocation:
+    Description: The IP address range that can be used to SSH & RDP into the EC2 instances
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  HyperVAmiId:
+    Description: Hyper-V AMI ID. The default AMI used is Windows_Server-2019-English-Full-HyperV-2023.09.13
+    Type: String
+    Default: ami-022c34f217e5811db
+
+Resources:
+  # Primary Virtual Private Cloud (VPC)
+  PrimaryVPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: !Ref PrimaryVpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: blog-primary-vpc
+  
+  # Internet Gateway to allow communication between the Primary VPC and internet
+  PrimaryInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: blog-primary-igw
+  
+  # Attaches the internet gateway to the Primary VPC
+  PrimaryInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref PrimaryInternetGateway
+      VpcId: !Ref PrimaryVPC
+  
+  # Primary public subnet in the first availability zone
+  PrimaryPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PrimaryVPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PrimaryPublicSubnetCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: blog-primary-public-subnet
+
+  # Primary public route table
+  PrimaryPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref PrimaryVPC
+      Tags:
+        - Key: Name
+          Value: blog-primary-public-route-table
+
+  # Default route for internet traffic to the Primary VPC internet gateway
+  DefaultPrimaryPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: PrimaryInternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PrimaryPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref PrimaryInternetGateway
+
+  # Associate Primary public subnet to the Primary public route table
+  PrimaryPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrimaryPublicRouteTable
+      SubnetId: !Ref PrimaryPublicSubnet
+
+  # Staging Virtual Private Cloud (VPC)
+  StagingVPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: !Ref StagingVpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: blog-staging-vpc
+  
+  # Internet Gateway to allow communication between the Staging VPC and internet
+  StagingInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: blog-staging-igw
+  
+  # Attaches the internet gateway to the Staging VPC
+  StagingInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref StagingInternetGateway
+      VpcId: !Ref StagingVPC
+  
+  # Staging public subnet in the second availability zone
+  StagingPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref StagingVPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref StagingPublicSubnetCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: blog-staging-public-subnet
+
+  # Staging public route table
+  StagingPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref StagingVPC
+      Tags:
+        - Key: Name
+          Value: blog-staging-public-route-table
+
+  # Default route for internet traffic to the Staging VPC internet gateway
+  DefaultStagingPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: StagingInternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref StagingPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref StagingInternetGateway
+
+  # Associate Staging public subnet to the Staging public route table
+  StagingPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref StagingPublicRouteTable
+      SubnetId: !Ref StagingPublicSubnet
+
+  # Recovery Virtual Private Cloud (VPC)
+  RecoveryVPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: !Ref RecoveryVpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: blog-recovery-vpc
+  
+  # Internet Gateway to allow communication between the Recovery VPC and internet
+  RecoveryInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: blog-recovery-igw
+  
+  # Attaches the internet gateway to the Recovery VPC
+  RecoveryInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref RecoveryInternetGateway
+      VpcId: !Ref RecoveryVPC
+  
+  # Recovery public subnet in the third availability zone
+  RecoveryPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref RecoveryVPC
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: !Ref RecoveryPublicSubnetCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: blog-recovery-public-subnet
+
+  # Recovery public route table
+  RecoveryPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref RecoveryVPC
+      Tags:
+        - Key: Name
+          Value: blog-recovery-public-route-table
+
+  # Default route for internet traffic to the Recovery VPC internet gateway
+  DefaultRecoveryPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: RecoveryInternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref RecoveryPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref RecoveryInternetGateway
+
+  # Associate Recovery public subnet to the Recovery public route table
+  RecoveryPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RecoveryPublicRouteTable
+      SubnetId: !Ref RecoveryPublicSubnet
+
+  # Hyper-V instance security group
+  HyperVSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable RDP access via port 3389
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3389
+        ToPort: 3389
+        CidrIp: !Ref 'IpLocation'
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: !Ref 'IpLocation'
+      Tags:
+        - Key: Name
+          Value: blog-hyperv-sg
+      VpcId: !Ref PrimaryVPC
+
+  # Hyper-V Bare Metal
+  HyperVInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref 'HyperVInstanceType'
+      KeyName: !Ref 'KeyName'
+      ImageId: !Ref 'HyperVAmiId'
+      BlockDeviceMappings:
+      - DeviceName: /dev/sda1
+        Ebs:
+          VolumeSize: 120
+          VolumeType: gp2
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: 'true'
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref HyperVSecurityGroup
+          SubnetId: !Ref PrimaryPublicSubnet
+      Tags:
+        - Key: Name
+          Value: hyper-v-host
+
+  # Recovery instance security group
+  RecoverySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable recovery RDP access via port 3389, replication via port 1500
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3389
+        ToPort: 3389
+        CidrIp: !Ref 'IpLocation'
+      - IpProtocol: tcp
+        FromPort: 1500
+        ToPort: 1500
+        CidrIp: !Ref 'IpLocation'
+      Tags:
+        - Key: Name
+          Value: blog-recovery-sg
+      VpcId: !Ref RecoveryVPC
+
+  # Elastic Disaster Recovery IAM Replication Agent User
+  DRSIAMUser:
+    Type: AWS::IAM::User
+    Properties: 
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AWSElasticDisasterRecoveryAgentInstallationPolicy
+        - arn:aws:iam::aws:policy/AWSElasticDisasterRecoveryFailbackInstallationPolicy        
+      UserName: 'DRSAgentUser'
+
+  DRSIAMAccessKey:
+    Type: AWS::IAM::AccessKey
+    DependsOn: DRSIAMUser
+    Properties: 
+      UserName: 'DRSAgentUser'
+
+Outputs:
+  DRSIAMAccessKeyId:
+    Description: IAM user access key ID
+    Value: !Ref DRSIAMAccessKey
+    Export:
+      Name: 'DRSIAMAccessKeyId'
+
+  DRSIAMSecretAccessKey:
+    Description: IAM user secret access key
+    Value: !GetAtt DRSIAMAccessKey.SecretAccessKey
+    Export:
+      Name: 'DRSIAMSecretAccessKey'
