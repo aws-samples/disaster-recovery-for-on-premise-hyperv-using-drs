@@ -60,7 +60,7 @@ In our example, the Get-NetAdapter command shows that the Hyper-V virtual switch
 
 `Add-DhcpServerv4Scope -Name GuestIPRange -StartRange 192.168.0.10 -EndRange 192.168.0.20 -SubnetMask 255.255.255.0 -State Active`
 
-8. To configure the DHCP server to bind on the Hyper-V virtual interface, choose Control Panel > Administrative Tools > > DHCP. Add the localhost as a server.
+8. To configure the DHCP server to bind on the Hyper-V virtual interface, choose Control Panel > Administrative Tools > DHCP. Add the localhost as a server.
 9. Once the server has been added, right-click on the server and choose ‘Add or Remove Bindings’ to confirm that the binding to virtual interface is selected.
 10. Configure the DHCP server options for ‘Router’ and ‘DNS Server’, where the router IP is the NAT gateway IP created earlier, and the DNS server IP is the Amazon provided DNS server in your VPC. In our example, the ‘blog-primary-public-subnet’ CIDR is 10.0.0.0/24, so the IP address of the DNS server is the base of the VPC network range plus two (which is 10.0.0.2). Run the following command:
 
