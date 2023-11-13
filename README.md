@@ -5,7 +5,7 @@ This repository contains a sample CloudFormation template to deploy Hyper-V on a
 ***Note:*** If you are following the blog 'Using AWS Elastic Disaster Recovery to protect Hyper-V workloads on-premise', this CloudFormation template deploys an infrastructure that simulates an on-premise Hyper-V environment. Once deployed, you can follow the blog instructions to set up AWS Elastic Disaster Recovery, install the replication agent, initiate a drill and perform a failback.
 
 ## Deployed architecture
-![drs-blog-solution-github](https://github.com/aws-samples/disaster-recovery-for-on-premise-hyperv-using-drs/assets/91114681/62be7eb1-0425-46eb-be3a-e17921433117)
+![drs-blog-solution-github](https://github.com/aws-samples/disaster-recovery-for-on-premise-hyperv-using-drs/assets/91114681/715615de-273b-4c53-8d75-3ca9aac6c7ec)
 
 The CloudFormation template will set up the following components:
 - Three VPCs
