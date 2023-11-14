@@ -5,7 +5,7 @@ This repository contains a sample CloudFormation template to deploy Hyper-V on a
 ***Note:*** If you are following the blog 'Using AWS Elastic Disaster Recovery to protect Hyper-V workloads on-premise', this CloudFormation template deploys an infrastructure that simulates an on-premise Hyper-V environment. Once deployed, you can follow the blog instructions to set up AWS Elastic Disaster Recovery, install the replication agent, initiate a drill and perform a failback.
 
 ## Deployed architecture
-![drs-blog-solution-github](https://github.com/aws-samples/disaster-recovery-for-on-premise-hyperv-using-drs/assets/91114681/715615de-273b-4c53-8d75-3ca9aac6c7ec)
+![drs-blog-solution-github](https://github.com/aws-samples/disaster-recovery-for-on-premise-hyperv-using-drs/assets/91114681/dfe792c6-5f1f-48e8-bc2c-301e74f2c750)
 
 The CloudFormation template will set up the following components:
 - Three VPCs
@@ -44,7 +44,7 @@ For this walkthrough, you should have the following prerequisites:
 `Get-NetAdapter`  
 
 In our example, the Get-NetAdapter command shows that the Hyper-V virtual switch has an ifIndex value of 15:
-![drs-blog-get-adapter](https://github.com/aws-samples/disaster-recovery-for-on-premise-hyperv-using-drs/assets/91114681/8eec3857-c659-4c98-9b89-0a25feaf4c23)
+![blog-3-get-adapter](https://github.com/aws-samples/disaster-recovery-for-on-premise-hyperv-using-drs/assets/91114681/96e273d3-08e9-464e-a14a-7460cb2a07c5)
 
 4. Run the following PowerShell command to configure the Hyper-V Virtual Ethernet adapter with the NAT gateway IP address. This IP address is used as default gateway (Router IP) for the guest VMs. The following command sets the IP address 192.168.0.1 with a subnet mask 255.255.255.0 on the Interface (Interface Index 15):
 
